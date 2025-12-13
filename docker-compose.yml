@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  grobid:
+    image: lfoppiano/grobid:0.8.0
+    container_name: research_os_grobid
+    ports:
+      - "8070:8070"
+    environment:
+      - JAVA_OPTS=-Xmx2g
+    restart: unless-stopped

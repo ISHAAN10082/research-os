@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ResearchOS Graph Mode</title>
+    <script src="https://unpkg.com/3d-force-graph"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+        }
+
+        .sidebar-icon {
+            padding: 12px;
+            border-radius: 12px;
+            transition: all 0.2s;
+            color: #94a3b8;
+        }
+
+        .sidebar-icon:hover {
+            background-color: #1e293b;
+            color: white;
+        }
+
+        .active-icon {
+            background-color: #2563eb;
+            color: white;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="graph-container" style="width: 100vw; height: 100vh;"></div>
+
+    <!-- Sidebar Overlay -->
+    <div
+        class="fixed left-0 top-0 h-full w-16 bg-slate-950/80 backdrop-blur border-r border-slate-800 flex flex-col items-center py-4 z-50">
+        <div class="mb-8 font-bold text-blue-500">ROS</div>
+        <a href="/" class="sidebar-icon mb-2" title="Canvas">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+            </svg>
+        </a>
+        <a href="/reading" class="sidebar-icon mb-2" title="Reading">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+        </a>
+        <a href="/graph" class="active-icon mb-2" title="Graph">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+            </svg>
+        </a>
+    </div>
+
+    <!-- HUD -->
+    <div
+        class="fixed top-4 left-20 bg-slate-900/80 backdrop-blur p-4 rounded-xl border border-slate-700 text-white z-40 max-w-sm">
+        <h1 class="font-bold text-lg bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">
+            Citation Galaxy</h1>
+        <p class="text-sm text-slate-400 mt-1">Navigate your research topology in 3D.</p>
+        <div id="stats" class="text-xs text-slate-500 mt-2 font-mono">Loading data...</div>
+    </div>
+
+    <!-- Search Overlay -->
+    <div class="fixed top-4 right-4 z-50 flex flex-col items-end">
+        <button onclick="document.getElementById('search-panel').classList.toggle('hidden')"
+            class="bg-blue-600 hover:bg-blue-500 text-white p-3 rounded-full shadow-lg mb-4 transition-all">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+        </button>
+
+        <div id="search-panel"
+            class="hidden bg-slate-900/90 backdrop-blur border border-slate-700 w-96 rounded-2xl shadow-2xl p-4 flex flex-col max-h-[80vh]">
+            <h3 class="font-bold text-slate-200 mb-3">Add Papers (ArXiv)</h3>
+            <div class="flex space-x-2 mb-4">
+                <input id="search-input" type="text" placeholder="Quantum computing..."
+                    class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500">
+                <button onclick="searchPapers()"
+                    class="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-bold">Go</button>
+            </div>
+
+            <div id="search-results" class="flex-1 overflow-y-auto space-y-2">
+                <!-- Results injected here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Graph Initialization
+        const refreshGraph = () => {
+            fetch('/api/graph')
+                .then(res => res.json())
+                .then(data => {
+                    const elem = document.getElementById('graph-container');
+                    const Graph = ForceGraph3D()
+                        (elem)
+                        .graphData(data)
+                        .nodeLabel('id')
+                        .nodeColor(node => node.group === 1 ? '#3b82f6' : '#10b981')
+                        .nodeResolution(8)
+                        .linkDirectionalParticles(2)
+                        .linkDirectionalParticleSpeed(d => 0.005)
+                        .backgroundColor('#000000')
+                        .onNodeClick(node => {
+                            // Open PDF?
+                            window.location.href = `/reading?paper=${encodeURIComponent(node.id)}`;
+                        });
+
+                    let angle = 0;
+                    setInterval(() => {
+                        Graph.cameraPosition({
+                            x: 400 * Math.sin(angle),
+                            z: 400 * Math.cos(angle)
+                        });
+                        angle += Math.PI / 500;
+                    }, 10);
+
+                    document.getElementById('stats').innerText = `${data.nodes.length} papers • ${data.links.length} connections`;
+                });
+        };
+
+        refreshGraph();
+
+        // Search Logic
+        async function searchPapers() {
+            const query = document.getElementById('search-input').value;
+            if (!query) return;
+
+            const resultsDiv = document.getElementById('search-results');
+            resultsDiv.innerHTML = '<div class="text-center text-slate-500 animate-pulse">Searching ArXiv...</div>';
+
+            try {
+                const res = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query })
+                });
+                const papers = await res.json();
+
+                resultsDiv.innerHTML = papers.map(p => `
+                    <div class="bg-slate-800 p-3 rounded-lg border border-slate-700 hover:border-slate-500 transition-colors">
+                        <div class="font-bold text-sm text-slate-200 line-clamp-2">${p.title}</div>
+                        <div class="text-xs text-slate-400 mt-1">${p.authors[0]} (${p.published})</div>
+                        <button onclick='ingestPaper(${JSON.stringify(p).replace(/'/g, "&#39;")})' 
+                                class="mt-2 w-full bg-slate-700 hover:bg-green-600 text-slate-300 hover:text-white py-1 rounded text-xs transition-colors">
+                            + Add to Graph
+                        </button>
+                    </div>
+                `).join('');
+            } catch (e) {
+                resultsDiv.innerHTML = `<div class="text-red-400 text-sm">Error: ${e}</div>`;
+            }
+        }
+
+        async function ingestPaper(paper) {
+            const btn = event.target;
+            const originalText = btn.innerText;
+            btn.innerText = "Downloading...";
+            btn.disabled = true;
+            btn.classList.add('animate-pulse');
+
+            try {
+                await fetch('/api/ingest', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: paper.title,
+                        pdf_url: paper.pdf_url,
+                        abstract: paper.abstract,
+                        authors: paper.authors
+                    })
+                });
+                btn.innerText = "✅ Added";
+                btn.classList.remove('bg-slate-700', 'animate-pulse');
+                btn.classList.add('bg-green-600', 'text-white');
+                refreshGraph(); // Reload graph
+            } catch (e) {
+                console.error(e);
+                btn.innerText = "Error";
+                btn.classList.add('bg-red-600');
+            }
+        }
+    </script>
+</body>
+
+</html>

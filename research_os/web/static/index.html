@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ResearchOS Canvas</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+    </script>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #e2e8f0;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            margin: 0;
+        }
+
+        .glass {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .card {
+            position: absolute;
+            width: 400px;
+            max-height: 500px;
+            display: flex;
+            flex-direction: column;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            transition: box-shadow 0.2s, transform 0.1s;
+            cursor: grab;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .card:active {
+            cursor: grabbing;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+            z-index: 1000 !important;
+            transform: scale(1.01);
+        }
+
+        .card-content {
+            overflow-y: auto;
+            padding-right: 8px;
+        }
+
+        .card-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .card-content::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        .canvas-bg {
+            background-image: radial-gradient(#334155 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        // Styles
+        const styles = {
+            card: "absolute flex flex-col rounded-2xl bg-slate-900/95 border border-slate-700 shadow-2xl backdrop-blur-md transition-all duration-300",
+            cardDefault: "w-[500px] h-[600px]",
+            cardFocused: "fixed top-10 left-10 right-10 bottom-24 z-[9999] w-auto h-auto shadow-[0_0_100px_rgba(0,0,0,0.8)] border-blue-500/50",
+            bubbleUser: "bg-slate-800 text-slate-200 p-3 rounded-2xl rounded-tr-sm self-end max-w-[90%] mb-2 text-sm",
+            bubbleAI: "bg-blue-900/20 text-blue-100 p-3 rounded-2xl rounded-tl-sm self-start max-w-[90%] mb-2 text-sm border border-blue-500/10",
+        };
+
+        function App() {
+            // State
+            const [threads, setThreads] = useState([]); // { id, x, y, messages: [{role, content}], isStreaming, isFocused }
+            const [edges, setEdges] = useState([]);
+            const [globalInput, setGlobalInput] = useState("");
+            const [ws, setWs] = useState(null);
+
+            // Viewport
+            const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
+            const [isPanning, setIsPanning] = useState(false);
+            const lastPan = useRef({ x: 0, y: 0 });
+
+            // WS Connection
+            useEffect(() => {
+                const socket = new WebSocket(`ws://${window.location.host}/ws/chat`);
+                socket.onopen = () => console.log("✅ WS Connected");
+                socket.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+
+                    if (data.type === "token") {
+                        setThreads(prev => {
+                            // Find the active streaming thread (using the global tracker or just the one marked isStreaming)
+                            return prev.map(t => {
+                                if (t.isStreaming) {
+                                    // Update the last message (which is the AI response being built)
+                                    const msgs = [...t.messages];
+                                    const lastMsg = msgs[msgs.length - 1];
+                                    if (lastMsg && lastMsg.role === "assistant") {
+                                        lastMsg.content += data.content;
+                                        return { ...t, messages: msgs };
+                                    }
+                                }
+                                return t;
+                            });
+                        });
+                    } else if (data.type === "done") {
+                        setThreads(prev => prev.map(t => ({ ...t, isStreaming: false })));
+                    }
+                };
+                setWs(socket);
+                return () => socket.close();
+            }, []);
+
+            // Auto-Linking Logic (The Novelty)
+            useEffect(() => {
+                // Semantic linking simulation
+                // In a real system, we'd use embeddings. Here, we check for shared keywords.
+                if (threads.length < 2) return;
+
+                const newEdges = [];
+                const keywords = ["adhd", "eeg", "biomarker", "sleep", "attention", "theta", "beta", "gamification", "outreach"];
+
+                for (let i = 0; i < threads.length; i++) {
+                    for (let j = i + 1; j < threads.length; j++) {
+                        const t1 = threads[i];
+                        const t2 = threads[j];
+                        const text1 = t1.messages.map(m => m.content.toLowerCase()).join(" ");
+                        const text2 = t2.messages.map(m => m.content.toLowerCase()).join(" ");
+
+                        // Check overlap
+                        const overlap = keywords.filter(k => text1.includes(k) && text2.includes(k));
+                        if (overlap.length > 0) {
+                            newEdges.push({ from: t1.id, to: t2.id, label: overlap[0] });
+                        }
+                    }
+                }
+                setEdges(newEdges);
+            }, [threads]);
+
+            // Actions
+            const createThread = (initialPrompt) => {
+                const centerX = (-view.x + window.innerWidth / 2) / view.scale - 250;
+                const centerY = (-view.y + window.innerHeight / 2) / view.scale - 300;
+
+                const newThread = {
+                    id: Date.now(),
+                    x: centerX + (Math.random() * 40 - 20),
+                    y: centerY + (Math.random() * 40 - 20),
+                    messages: [{ role: "user", content: initialPrompt }, { role: "assistant", content: "" }],
+                    isStreaming: true,
+                    zIndex: threads.length + 1,
+                    isFocused: false
+                };
+
+                setThreads(prev => [...prev, newThread]);
+
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ prompt: initialPrompt, context: "" }));
+                }
+            };
+
+            const continueThread = (threadId, prompt) => {
+                setThreads(prev => prev.map(t => {
+                    if (t.id === threadId) {
+                        return {
+                            ...t,
+                            messages: [...t.messages, { role: "user", content: prompt }, { role: "assistant", content: "" }],
+                            isStreaming: true
+                        };
+                    }
+                    return t;
+                }));
+
+                // Get context from previous messages
+                const thread = threads.find(t => t.id === threadId);
+                const context = thread ? thread.messages.map(m => `${m.role}: ${m.content}`).join("\n") : "";
+
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ prompt, context }));
+                }
+            };
+
+            const toggleFocus = (id) => {
+                setThreads(prev => prev.map(t =>
+                    t.id === id ? { ...t, isFocused: !t.isFocused, zIndex: 9999 } : { ...t, isFocused: false }
+                ));
+            };
+
+            const handleGlobalSubmit = (e) => {
+                e.preventDefault();
+                if (!globalInput.trim()) return;
+                createThread(globalInput);
+                setGlobalInput("");
+            };
+
+            const moveThread = (id, dx, dy) => {
+                setThreads(prev => prev.map(t =>
+                    t.id === id && !t.isFocused ? { ...t, x: t.x + dx / view.scale, y: t.y + dy / view.scale } : t
+                ));
+            };
+
+            // Canvas Interaction
+            const handleWheel = (e) => {
+                if (e.target.closest('.thread-card')) return; // STOP PROPAGATION manually
+                setView(prev => ({ ...prev, scale: Math.min(Math.max(prev.scale - e.deltaY * 0.001, 0.2), 3) }));
+            };
+            const handleMouseDown = (e) => {
+                if (!e.target.closest('.thread-card') && !e.target.closest('form')) {
+                    setIsPanning(true);
+                    lastPan.current = { x: e.clientX, y: e.clientY };
+                }
+            };
+            const handleMouseMove = (e) => {
+                if (isPanning) {
+                    const dx = e.clientX - lastPan.current.x;
+                    const dy = e.clientY - lastPan.current.y;
+                    setView(prev => ({ ...prev, x: prev.x + dx, y: prev.y + dy }));
+                    lastPan.current = { x: e.clientX, y: e.clientY };
+                }
+            };
+            const handleMouseUp = () => setIsPanning(false);
+
+            return (
+                <div className="w-screen h-screen bg-slate-900 overflow-hidden"
+                    onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onWheel={handleWheel}>
+
+                    {/* App Shell Sidebar (Preserved) */}
+                    <div className="fixed left-0 top-0 h-full w-16 bg-slate-950/80 backdrop-blur z-50 flex flex-col items-center py-4 border-r border-slate-800">
+                        <div className="mb-8 font-bold text-blue-500">ROS</div>
+                        <a href="/" className="p-3 mb-2 rounded-xl bg-blue-600 text-white"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg></a>
+                        <a href="/reading" className="p-3 mb-2 rounded-xl text-slate-400 hover:text-white"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg></a>
+                        <a href="/graph" className="p-3 mb-2 rounded-xl text-slate-400 hover:text-white"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg></a>
+                    </div>
+
+                    {/* Canvas Area */}
+                    <div className="absolute top-0 left-0 w-full h-full canvas-bg" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`, transformOrigin: '0 0' }}>
+
+                        {/* Edges */}
+                        <svg className="absolute w-[5000px] h-[5000px] overflow-visible pointer-events-none">
+                            {edges.map((e, i) => {
+                                const t1 = threads.find(t => t.id === e.from);
+                                const t2 = threads.find(t => t.id === e.to);
+                                if (!t1 || !t2) return null;
+                                return (
+                                    <g key={i}>
+                                        <line x1={t1.x + 250} y1={t1.y + 50} x2={t2.x + 250} y2={t2.y + 50} stroke="#60a5fa" strokeWidth="2" strokeDasharray="5,5" opacity="0.4" />
+                                        <text x={(t1.x + t2.x) / 2 + 250} y={(t1.y + t2.y) / 2 + 50} fill="#94a3b8" fontSize="12" textAnchor="middle" className="bg-slate-900 px-1">{e.label}</text>
+                                    </g>
+                                );
+                            })}
+                        </svg>
+
+                        {/* Threads */}
+                        {threads.map(thread => (
+                            <ThreadCard
+                                key={thread.id}
+                                thread={thread}
+                                onMove={moveThread}
+                                onReply={continueThread}
+                                onFocus={toggleFocus}
+                                styles={styles}
+                            />
+                        ))}
+                    </div>
+
+                    {/* Global Input */}
+                    <div className="fixed bottom-10 left-1/2 transform -translate-x-1/2 w-full max-w-2xl px-4 z-50">
+                        <form onSubmit={handleGlobalSubmit}>
+                            <input
+                                value={globalInput}
+                                onChange={e => setGlobalInput(e.target.value)}
+                                placeholder="Start a new research thread..."
+                                className="w-full bg-slate-950/80 border border-slate-700 rounded-full py-4 px-6 text-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-2xl backdrop-blur-xl"
+                            />
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        function ThreadCard({ thread, onMove, onReply, onFocus, styles }) {
+            const [input, setInput] = useState("");
+            const [isDragging, setIsDragging] = useState(false);
+            const dragStart = useRef({ x: 0, y: 0 });
+
+            // Drag Logic
+            useEffect(() => {
+                const handleMouseMove = (e) => {
+                    if (!isDragging || thread.isFocused) return; // Disable drag if focused
+                    e.preventDefault(); e.stopPropagation();
+                    const dx = e.clientX - dragStart.current.x;
+                    const dy = e.clientY - dragStart.current.y;
+                    onMove(thread.id, dx, dy);
+                    dragStart.current = { x: e.clientX, y: e.clientY };
+                };
+                const handleMouseUp = () => setIsDragging(false);
+                if (isDragging) { window.addEventListener('mousemove', handleMouseMove); window.addEventListener('mouseup', handleMouseUp); }
+                return () => { window.removeEventListener('mousemove', handleMouseMove); window.removeEventListener('mouseup', handleMouseUp); };
+            }, [isDragging, thread.id, thread.isFocused, onMove]);
+
+            const submitReply = (e) => {
+                e.preventDefault();
+                if (!input.trim()) return;
+                onReply(thread.id, input);
+                setInput("");
+            };
+
+            return (
+                <div
+                    className={`${styles.card} ${thread.isFocused ? styles.cardFocused : styles.cardDefault} thread-card`}
+                    style={!thread.isFocused ? { left: thread.x, top: thread.y, zIndex: thread.zIndex } : {}}
+                    onMouseDown={(e) => { e.stopPropagation(); setIsDragging(true); dragStart.current = { x: e.clientX, y: e.clientY }; }}
+                    onWheel={(e) => e.stopPropagation()} // CRITICAL: Stop zoom propagation
+                >
+                    {/* Header */}
+                    <div className="p-3 border-b border-white/5 flex justify-between items-center cursor-move bg-slate-800/50 rounded-t-2xl">
+                        <div className="flex items-center space-x-2">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Thread #{thread.id.toString().slice(-4)}</span>
+                            {thread.isStreaming && <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>}
+                        </div>
+                        <button onClick={() => onFocus(thread.id)} className="text-slate-400 hover:text-white transition">
+                            {thread.isFocused ? <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg> : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>}
+                        </button>
+                    </div>
+
+                    {/* Messages Area */}
+                    <div className="flex-1 overflow-y-auto p-4 flex flex-col space-y-4 min-h-[200px]">
+                        {thread.messages.map((msg, i) => (
+                            <div key={i} className={msg.role === "user" ? styles.bubbleUser : styles.bubbleAI}>
+                                <MessageRenderer content={msg.content} />
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Reply Input */}
+                    <form onSubmit={submitReply} className="p-3 border-t border-white/5 bg-slate-900/50 rounded-b-2xl">
+                        <input
+                            value={input}
+                            onChange={e => setInput(e.target.value)}
+                            placeholder="Continue this thread..."
+                            className="w-full bg-slate-800 text-slate-200 text-sm rounded-lg px-3 py-2 border border-slate-700 focus:outline-none focus:border-blue-500"
+                        />
+                    </form>
+                </div>
+            );
+        }
+
+        // --- Message Renderer (Markdown + Mermaid) ---
+        function MessageRenderer({ content }) {
+            useEffect(() => {
+                if (window.mermaid) {
+                    window.mermaid.contentLoaded();
+                }
+            }, [content]);
+
+            // Simple parser: Split by ```mermaid ... ```
+            const parts = content.split(/(```mermaid[\s\S]*?```)/g);
+
+            return (
+                <div className="prose prose-invert prose-sm max-w-none">
+                    {parts.map((part, i) => {
+                        if (part.startsWith('```mermaid')) {
+                            const code = part.replace('```mermaid', '').replace('```', '').trim();
+                            return (
+                                <div key={i} className="mermaid my-4 bg-slate-950/50 p-4 rounded-lg overflow-x-auto">
+                                    {code}
+                                </div>
+                            );
+                        }
+                        // Basic formatting (bold/bullets) - simplified for vanilla JS regex
+                        return (
+                            <div key={i} className="whitespace-pre-wrap">
+                                {part}
+                            </div>
+                        );
+                    })}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>
