@@ -1,4 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import remarkGfm from 'remark-gfm';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { useResearchStore } from '../stores/useResearchStore';
 import { wsSync } from '../services/WebSocketSync';
 import { Send, Zap, Cloud, Bot } from 'lucide-react';
@@ -26,8 +31,10 @@ export function ChatInterface() {
         setGenerating(true);
         setInput('');
 
-        // Retrieve context from store (e.g. active paper abstract)
-        const context = useResearchStore.getState().activePaper?.abstract || "";
+        // Retrieve context from store (e.g. active paper text)
+        // Priority: raw_text (full PDF) > abstract (from ArXiv) > empty
+        const activePaper = useResearchStore.getState().activePaper;
+        const context = activePaper?.raw_text || activePaper?.["p.raw_text"] || activePaper?.abstract || "";
 
         wsSync.streamChat(
             userMsg.content,
