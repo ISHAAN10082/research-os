@@ -7,7 +7,7 @@ from pprint import pprint
 # Add parent path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from jarvis_m4.services.palace import MemoryPalace
+from jarvis_m4.services.palace import MemoryPalaceV2 as MemoryPalace
 from jarvis_m4.services.scene import SceneGenerator
 
 def run_spatial_verification():

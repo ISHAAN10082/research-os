@@ -1,10 +1,10 @@
 """Fixed extract.py - Uses MPNet instead of SPECTER2"""
 
+
 from dataclasses import dataclass, field
 from typing import List, Literal
 import json
 import re
-from sentence_transformers import SentenceTransformer
 
 @dataclass
 class ExtractedClaim:
@@ -23,23 +23,28 @@ class ClaimExtractorV2:
         
         # LLM for extraction
         try:
-            from mlx_lm import load, generate
-            self.mlx_model, self.mlx_tokenizer = load(model_path)
+            from mlx_lm import generate
+            
+            # Use Model Cache for Shared LLM
+            from research_os.foundation.model_cache import get_phi35
+            self.mlx_model, self.mlx_tokenizer = get_phi35()
+            
             self.generate = generate
             self.use_mlx = True
         except Exception as e:
             print(f"⚠️ MLX failed: {e}")
             self.use_mlx = False
         
-        # Fast embedder
+        # Fast embedder (via ModelCache)
         print("Loading MiniLM embedder (fast)...")
-        self.minilm = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
-        print("✅ MiniLM loaded")
+        from research_os.foundation.model_cache import get_minilm, get_mpnet
+        self.minilm = get_minilm()
+        print("✅ MiniLM loaded (FastEmbed)")
         
         # High-quality embedder (MPNet instead of SPECTER2)
         print("Loading MPNet embedder (high‑quality)...")
-        self.specter2 = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
-        print("✅ MPNet loaded (using instead of SPECTER2)")
+        self.specter2 = get_mpnet()
+        print("✅ MPNet loaded (FastEmbed)")
     
     def extract_from_paper(self, text: str, paper_id: str) -> List[ExtractedClaim]:
         """Extract claims from paper"""
@@ -69,7 +74,8 @@ class ClaimExtractorV2:
         claims = []
         for i, sent in enumerate(sentences):
             if len(sent.strip()) > 20:
-                embedding = self.specter2.encode(sent.strip())
+                # FastEmbed returns list[np.ndarray] -> take [0] -> np.ndarray
+                embedding = self.specter2.encode([sent.strip()])[0]
                 
                 claim = ExtractedClaim(
                     claim_id=f"{paper_id}_claim_{i}",

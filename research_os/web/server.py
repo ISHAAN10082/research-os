@@ -147,8 +147,25 @@ class EventRequest(BaseModel):
     event_type: str
     data: dict
 
-# Create FastAPI app
-app = FastAPI(title="ResearchOS API", version="3.0")
+# Create FastAPI app with lifespan management
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan manager for startup and shutdown"""
+    # Startup
+    logger.info("🚀 ResearchOS server starting up...")
+    yield
+    # Shutdown
+    logger.info("🛑 ResearchOS server shutting down...")
+    try:
+        from research_os.foundation.model_cache import cleanup_models
+        cleanup_models()
+        logger.info("✅ Model cache cleaned up")
+    except Exception as e:
+        logger.error(f"Cleanup error: {e}")
+
+app = FastAPI(title="ResearchOS API", version="3.0", lifespan=lifespan)
 
 # CORS for frontend
 app.add_middleware(
@@ -160,6 +177,28 @@ app.add_middleware(
 )
 
 # API Endpoints
+
+# --- Health Check ---
+@app.get("/api/health")
+async def health_check():
+    """
+    Health check endpoint for startup orchestration.
+    Returns status of all critical services.
+    """
+    services = {
+        "retrieval": hasattr(retriever, 'search'),
+        "debate": hasattr(pipeline.debate_agents, 'model'),
+        "schema": hasattr(schema, 'db_ready') and schema.db_ready if hasattr(schema, 'db_ready') else True,
+        "foundation": hasattr(foundation, 'model') and foundation.model is not None,
+    }
+    
+    all_healthy = all(services.values())
+    
+    return {
+        "status": "healthy" if all_healthy else "degraded",
+        "services": services,
+        "timestamp": asyncio.get_event_loop().time()
+    }
 
 # --- Telemetry & Intelligence ---
 @app.post("/api/telemetry/event")
@@ -173,11 +212,88 @@ async def get_dashboard_summary():
     """Get high-level insights."""
     return intelligence.generate_session_summary()
 
+# --- Export Endpoints ---
+from fastapi.responses import FileResponse
+import tempfile
+
+@app.get("/api/export/bibtex")
+async def export_bibtex_endpoint():
+    """
+    Export all papers as BibTeX file.
+    
+    Returns downloadable .bib file with all papers in library.
+    """
+    try:
+        from research_os.export.bibtex import BibTeXExporter
+        
+        # Get all papers
+        papers = schema.get_all_papers()
+        
+        if not papers:
+            return {"error": "No papers in library", "count": 0}
+        
+        # Generate BibTeX
+        exporter = BibTeXExporter()
+        bibtex_content = exporter.generate_bibtex(papers)
+        
+        # Validate
+        warnings = exporter.validate_bibtex(bibtex_content)
+        if warnings:
+            logger.warning(f"BibTeX warnings: {warnings}")
+        
+        # Write to temp file
+        output_path = "data/research_library.bib"
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(bibtex_content)
+        
+        logger.info(f"📚 Exported {len(papers)} papers to BibTeX")
+        
+        return FileResponse(
+            path=output_path,
+            media_type='application/x-bibtex',
+            filename='research_library.bib',
+            headers={'X-Paper-Count': str(len(papers))}
+        )
+        
+    except Exception as e:
+        logger.error(f"BibTeX export failed: {e}")
+        return {"error": str(e), "status": "failed"}
+
+@app.get("/api/export/bibtex/preview")
+async def preview_bibtex():
+    """
+    Preview BibTeX export (first 5 entries).
+    
+    Returns JSON with preview and stats.
+    """
+    try:
+        from research_os.export.bibtex import BibTeXExporter
+        
+        papers = schema.get_all_papers()
+        
+        # Generate only first 5 for preview
+        preview_papers = papers[:5] if papers else []
+        
+        exporter = BibTeXExporter()
+        preview_bibtex = exporter.generate_bibtex(preview_papers)
+        
+        return {
+            "preview": preview_bibtex,
+            "total_papers": len(papers),
+            "previewed": len(preview_papers),
+            "status": "ok"
+        }
+        
+    except Exception as e:
+        logger.error(f"BibTeX preview failed: {e}")
+        return {"error": str(e), "status": "failed"}
+
 # --- Data & Reading ---
 @app.get("/api/papers")
 async def list_papers():
     """List all papers (Mined from V2 Schema)"""
     return schema.get_all_papers()
+
 
 @app.post("/api/search")
 @app.post("/api/search")

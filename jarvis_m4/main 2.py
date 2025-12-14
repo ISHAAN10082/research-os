@@ -33,13 +33,8 @@ class UnifiedPipelineV2:
         
         try:
             # Graph backend (abstracted for migration)
-            # Graph backend (abstracted for migration)
             from jarvis_m4.services.graph_backend import create_backend
-            # Only pass db_path if needed (InMemory doesn't take it)
-            kwargs = {}
-            if backend_type == "kuzu":
-                kwargs["db_path"] = "data/research_v2.kuzu"
-            self.graph_backend = create_backend(backend_type, **kwargs)
+            self.graph_backend = create_backend(backend_type, db_path="data/research_v2.kuzu")
             logger.info(f"✅ Graph backend: {backend_type}")
             
             # Extraction with SPECTER2
@@ -219,11 +214,4 @@ However, computational cost remains a concern for large-scale deployment.
     print("✅ V2 PIPELINE STREAM TEST FINISHED")
 
 if __name__ == "__main__":
-    try:
-        import uvloop
-        uvloop.install()
-        print("✅ uvloop installed (High-Performance Async)")
-    except ImportError:
-        pass
-        
     asyncio.run(main())

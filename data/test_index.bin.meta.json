@@ -1,0 +1,1 @@
+{"id_to_index": {"c1": 0, "c2": 1, "c3": 2}, "id_to_metadata": {"c1": {"id": "c1", "text": "Transformers use self-attention mechanisms", "type": "method"}, "c2": {"id": "c2", "text": "BERT is based on transformer architecture", "type": "finding"}, "c3": {"id": "c3", "text": "Attention is all you need for NLP", "type": "hypothesis"}}}

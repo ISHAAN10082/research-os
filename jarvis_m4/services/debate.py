@@ -1,7 +1,7 @@
 from langgraph.graph import StateGraph, END
 from typing import TypedDict, List, Optional
 import mlx.core as mx
-from mlx_lm import load, generate
+from mlx_lm import generate
 import json
 import os
 
@@ -21,15 +21,17 @@ class DebateAgents:
     Optimized for M4: Serial execution, single model loaded.
     """
     
-    def __init__(self, model_path: str = "microsoft/Phi-3.5-mini-instruct"):
+    
+    def __init__(self, model_path: str = "mlx-community/phi-3.5-mini-instruct-4bit"):
         # Allow override via env var
         env_model_path = os.getenv("DEBATE_MODEL_PATH")
         if env_model_path:
             model_path = env_model_path
             
         print(f"Loading Debate Model ({model_path})...")
-        # Load model once, keep in memory (approx 2.5GB for 4-bit)
-        self.model, self.tokenizer = load(model_path)
+        # Load model via cache (shared with Extractor)
+        from research_os.foundation.model_cache import get_phi35
+        self.model, self.tokenizer = get_phi35()
         
     def _generate_response(self, system_prompt: str, user_prompt: str, max_tokens: int = 150, temp: float = 0.7) -> str:
         """Helper for formatted generation"""

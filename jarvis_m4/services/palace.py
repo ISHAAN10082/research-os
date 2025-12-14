@@ -1,14 +1,16 @@
 """Fixed palace.py - Uses MPNet instead of SPECTER2"""
 
-from sentence_transformers import SentenceTransformer
+
 import numpy as np
 from typing import List, Dict
 
 class MemoryPalaceV2:
     def __init__(self, schema=None):
-        print("Loading MPNet embedder for Memory Palace...")
-        self.embedder = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
-        print("✅ MPNet loaded for Memory Palace")
+        # Use cached model (FastEmbed via ModelCache)
+        from research_os.foundation.model_cache import get_mpnet
+        self.embedder = get_mpnet()
+        print("✅ Using cached Embedder (FastEmbed) for Memory Palace")
+        
         self.schema = schema
     
     def generate_palace(self, papers: List[Dict]) -> Dict:

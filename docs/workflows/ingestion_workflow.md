@@ -10,12 +10,15 @@ The **IngestionHydra** is an asynchronous parallel ingestion engine that routes 
 ```mermaid
 flowchart LR
     subgraph "IngestionHydra"
-        I["Input File"] --> R["InputRouter"]
+        I["Input File"] --> D["Deduplication"]
+        D -->|New| R["InputRouter"]
+        D -->|Duplicate| S["Skip"]
+        D -->|Update| U["Version Update"]
         R -->|PAPER| PP["PaperProcessor"]
         R -->|VOICE| VP["VoiceProcessor"]
         R -->|CODE| CP["CodeProcessor (TBD)"]
-        PP --> S["Store in Graph / Vector"]
-        VP --> S
+        PP --> S2["Store in Graph / Vector"]
+        VP --> S2
     end
 ```
 
@@ -34,7 +37,10 @@ flowchart LR
 ## Execution Flow
 
 1. **Input**: File path or directory.
-2. **Router** inspects file extension and returns `ResearchType`.
+2. **Deduplication**: Checks file hash, DOI, and arXiv version.
+   - If exact duplicate: Skips.
+   - If newer version (arXiv v1 → v2): Updates record.
+3. **Router** inspects file extension and returns `ResearchType`.
 3. **Processor** runs in a thread executor (`asyncio.to_thread`) to avoid blocking.
 4. **Output**: Processed document object ready for indexing.
 

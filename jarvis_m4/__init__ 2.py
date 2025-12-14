@@ -9,9 +9,9 @@ from .services import (
     ClaimExtractorV2,
     DebateAgents,
     EvidenceBasedDebate,
-    CausalGraphV2,
+    CausalGraph,
     UnifiedSchema,
-    MemoryPalaceV2,
+    MemoryPalace,
     SceneGenerator,
     ResearchReporter,
 )
@@ -20,9 +20,9 @@ __all__ = [
     "ClaimExtractorV2",
     "DebateAgents",
     "EvidenceBasedDebate",
-    "CausalGraphV2",
+    "CausalGraph",
     "UnifiedSchema",
-    "MemoryPalaceV2",
+    "MemoryPalace",
     "SceneGenerator",
     "ResearchReporter",
 ]

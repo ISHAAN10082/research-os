@@ -60,31 +60,17 @@ class BGEReranker:
         if self._initialized:
             return
         
+
         logger.info(f"Loading reranker: {self.model_name}")
         
         try:
-            from FlagEmbedding import FlagReranker
+            from research_os.foundation.model_cache import get_reranker
+            self._model = get_reranker()
+            logger.info("✅ BGE Reranker loaded (via FastEmbed)")
             
-            self._model = FlagReranker(
-                self.model_name,
-                use_fp16=self.use_fp16
-            )
-            logger.info("✅ BGE Reranker loaded")
-            
-        except ImportError:
-            logger.warning("FlagEmbedding not available, trying sentence-transformers")
-            try:
-                from sentence_transformers import CrossEncoder
-                
-                # Fallback to a smaller cross-encoder
-                self._model = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
-                self._fallback_mode = True
-                logger.info("✅ Cross-encoder fallback loaded")
-                
-            except ImportError:
-                logger.warning("No reranker available, using embedding similarity fallback")
-                self._model = None
-                self._fallback_mode = True
+        except ImportError as e:
+            logger.error(f"Failed to load reranker: {e}")
+            self._model = None
         
         self._initialized = True
     
@@ -96,14 +82,6 @@ class BGEReranker:
     ) -> List[Tuple[int, float]]:
         """
         Rerank documents by relevance to query.
-        
-        Args:
-            query: The search query
-            documents: List of document texts to rerank
-            top_k: Number of top results to return
-            
-        Returns:
-            List of (document_index, relevance_score) tuples, sorted by score descending
         """
         self._lazy_init()
         
@@ -111,19 +89,13 @@ class BGEReranker:
             return []
         
         if self._model is None:
-            # No reranker available - return original order with uniform scores
-            logger.debug("No reranker model, returning original order")
+            # No reranker available - return original order
             return [(i, 1.0 - i * 0.01) for i in range(min(len(documents), top_k))]
         
         try:
-            if self._fallback_mode:
-                # sentence-transformers CrossEncoder
-                pairs = [[query, doc] for doc in documents]
-                scores = self._model.predict(pairs)
-            else:
-                # FlagEmbedding FlagReranker
-                pairs = [[query, doc] for doc in documents]
-                scores = self._model.compute_score(pairs)
+            # FastEmbed Wrapper implements compute_score([[q, d]])
+            pairs = [[query, doc] for doc in documents]
+            scores = self._model.compute_score(pairs)
             
             # Create (index, score) pairs and sort
             ranked = [(i, float(score)) for i, score in enumerate(scores)]
@@ -152,9 +124,6 @@ class BGEReranker:
     ) -> List[dict]:
         """
         Rerank and return documents with scores.
-        
-        Returns:
-            List of dicts with 'document', 'score', and 'original_index'
         """
         ranked = self.rerank(query, documents, top_k)
         

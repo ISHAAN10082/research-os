@@ -1,4 +1,10 @@
-# Python
+# ===================================
+# ResearchOS .gitignore
+# ===================================
+
+# -----------------
+# Python Artifacts
+# -----------------
 __pycache__/
 *.py[cod]
 *$py.class
@@ -20,35 +26,146 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
+*.pyc
 
+# -----------------
 # Virtual Environment
+# -----------------
 venv/
 env/
 ENV/
 .env
 .venv
+.conda/
 
-# IDEs
+# -----------------
+# IDEs & Editors
+# -----------------
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
+.spyderproject
+.spyproject
 
+# -----------------
 # MacOS
+# -----------------
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
 
-# ResearchOS Specific (Data/Brain)
-# We ignore the actual data store but keep the structure definitions if any
-research_os.log
+# -----------------
+# Node.js (Frontend)
+# -----------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.pnpm-debug.log*
+
+# -----------------
+# ResearchOS Data (Large Files)
+# -----------------
+# Database files
 brain/
 kuzu_store/
+*.kuzu/
+research_v2.kuzu/
+
+# Vector indices
 faiss_index.bin
+*.faiss
+usearch_index/
+
+# Parsed documents cache
 parsed_documents/
 
-# User Data
+# -----------------
+# User Data (Privacy)
+# -----------------
+data/papers/*.pdf
+data/papers/*.PDF
+data/*.pdf
 *.pdf
+
+# Text extracts
 *.txt
 
-# Node
-node_modules/
-npm-debug.log
+# -----------------
+# Logs & Temp Files
+# -----------------
+*.log
+research_os.log
+backend.log
+frontend.log
+.cache/
+.tmp/
+temp/
+
+# -----------------
+# Backups (Local Only)
+# -----------------
+# Backups should NOT be in git - too large
+backups/
+
+# -----------------
+# Deduplication Cache
+# -----------------
+.dedup_cache/
+.test_dedup/
+
+# -----------------
+# Model Cache
+# -----------------
+# Sentence transformer cache
+~/.cache/torch/
+~/.cache/huggingface/
+
+# -----------------
+# Export Artifacts
+# -----------------
+# Generated BibTeX files (regenerable)
+data/*.bib
+research_library.bib
+
+# -----------------
+# Test Artifacts
+# -----------------
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# -----------------
+# Secrets & Credentials
+# -----------------
+*.pem
+*.key
+secrets.json
+.secrets/
+credentials.json
+
+# -----------------
+# Jupyter Notebooks (Checkpoints)
+# -----------------
+.ipynb_checkpoints/
+
+# -----------------
+# Documentation Build
+# -----------------
+docs/_build/
+site/
+
+# ===================================
+# KEEP IN GIT (Reference)
+# ===================================
+# !data/papers/.gitkeep
+# !data/.gitkeep
+# !tests/fixtures/

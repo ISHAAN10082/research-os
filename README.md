@@ -137,6 +137,18 @@ reporter.save_to_vault("Paper Title", md, folder="Papers")
 
 **Why it matters:** Auto-syncs to your Obsidian vault with frontmatter, backlinks, and LaTeX support.
 
+### 6. Export & Data Quality
+```python
+# Export Library
+curl http://localhost:8000/api/export/bibtex
+# Returns: structured .bib file with LaTeX escaping
+
+# Deduplication (Automatic)
+# Detects: Exact hash, DOI, arXiv v1->v2 updates
+```
+
+**Why it matters:** Maintains a clean, version-aware library and integrates with LaTeX/Overleaf via standard BibTeX.
+
 ---
 
 ## 🧪 Testing

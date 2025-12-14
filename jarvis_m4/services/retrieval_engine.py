@@ -1,6 +1,6 @@
 import faiss
 import numpy as np
-from sentence_transformers import SentenceTransformer
+
 from typing import List, Dict, Any, Optional
 import json
 
@@ -16,7 +16,7 @@ try:
              pass
 
     import chromadb
-    from chromadb.config import Settings
+    # Settings no longer needed for basic init in 0.4+
     HAS_CHROMA = True
 except Exception as e:
     HAS_CHROMA = False
@@ -31,10 +31,11 @@ class RetrievalEngine:
     def __init__(self, dimension: int = 768, use_chroma: bool = True):
         """Initialize retrieval engine"""
         
-        # High-quality embedder (SPECTER2 has PEFT issues, using mpnet)
+        # High-quality embedder (using FastEmbed via ModelCache)
         print("Loading embedder for retrieval...")
-        self.embedder = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
-        print("✅ Embedder loaded")
+        from research_os.foundation.model_cache import get_mpnet
+        self.embedder = get_mpnet()
+        print("✅ Embedder loaded (FastEmbed)")
         
         # HNSW index for high recall and sub‑ms search
         self.dimension = dimension
@@ -51,10 +52,8 @@ class RetrievalEngine:
         # Chroma (optional)
         self.use_chroma = use_chroma and HAS_CHROMA
         if self.use_chroma:
-            self.chroma_client = chromadb.Client(Settings(
-                chroma_db_impl="duckdb+parquet",
-                persist_directory="data/chroma"
-            ))
+            # Modern Chroma Init (v0.4+)
+            self.chroma_client = chromadb.PersistentClient(path="data/chroma")
             self.collection = self.chroma_client.get_or_create_collection("claims")
             print("✅ Chroma initialized")
     
@@ -87,10 +86,19 @@ class RetrievalEngine:
         Returns: List of {claim_id, text, similarity_score, metadata}
         """
         
-        # Embed query with SPECTER2
-        query_emb = self.embedder.encode(query_text, convert_to_numpy=True)
+        # Embed query with FastEmbed (returns list of embeddings)
+        # Note: wrapper returns [embedding], so we take [0]
+        # FastEmbed output is already list/numpy compatible
+        query_emb_list = self.embedder.encode([query_text])
+        query_emb = query_emb_list[0]
         
-        return self.search_by_embedding(query_emb.tolist(), top_k, min_similarity)
+        # If query_emb is numpy, tolist() works. If list, it's already list.
+        if hasattr(query_emb, 'tolist'):
+            query_vec = query_emb.tolist()
+        else:
+            query_vec = query_emb
+            
+        return self.search_by_embedding(query_vec, top_k, min_similarity)
     
     def search_by_embedding(self, embedding: List[float], top_k: int = 5, min_similarity: float = 0.0) -> List[Dict]:
         """Search by pre-computed embedding (for claim-to-claim similarity)"""
@@ -186,8 +194,17 @@ if __name__ == "__main__":
     
     for claim in claims:
         # Generate embedding
-        emb = engine.embedder.encode(claim['text'], convert_to_numpy=True)
-        engine.index_claim(claim['id'], emb.tolist(), claim)
+        emb_list = engine.embedder.encode([claim['text']])
+        emb = emb_list[0] # Take first item
+        
+        if hasattr(emb, 'tolist'):
+            emb_vec = emb.tolist()
+        else:
+            # FastEmbed might return numpy array (wrapper converts to list of arrays?)
+            # Wrapper returns list(model.embed) -> list of np.ndarray
+            emb_vec = emb.tolist() 
+
+        engine.index_claim(claim['id'], emb_vec, claim)
     
     # Search
     results = engine.search("What are transformers?", top_k=2)
